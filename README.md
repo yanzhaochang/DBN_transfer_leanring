@@ -1,10 +1,10 @@
 Power system emergency load shedding optimization software.
 
-author: Yanzhao Chang, Zhe Ren.
+Author: Yanzhao Chang, Zhe Ren.
 
-copyright:School of electrical engineering, Shandong University.
+Copyright:School of electrical engineering, Shandong University.
 
-version: 1.0 
+Version: 1.0 
 
 The software aims at the control of emergency load shedding after UHVDC blocking.
 
