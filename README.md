@@ -4,7 +4,7 @@ Author: Yanzhao Chang, Zhe Ren.
 
 Copyright:School of electrical engineering, Shandong University.
 
-Version: 1.0 
+Version: 1.1
 
 The software aims at the control of emergency load shedding after UHVDC blocking.
 
@@ -15,3 +15,4 @@ The basic principle of the software is the deep learning driven differential evo
 The module packages needed for software operation include: numpy, pandas, keras, pyqt5.
 Running app_main.py to start the software.
 
+Software introduction
