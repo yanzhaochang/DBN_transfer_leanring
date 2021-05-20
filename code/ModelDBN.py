@@ -5,19 +5,20 @@ import csv
 
 from keras.models import Sequential, load_model, Model
 from keras.layers import Dense, Dropout
-from keras import regularizers  # 正则化
+from keras import regularizers, backend  # 正则化
 from keras.optimizers import SGD, Adam
 from keras.callbacks import EarlyStopping
 
 from sklearn.neural_network import BernoulliRBM
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, classification_report
 
 import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['SimHei'] 
+plt.rcParams['axes.unicode_minus'] = False
 
 
 class DBNCLAS():  # 这是一个多输入单输出模型
-    def __init__(self, result_textedit=None):
-        self.result_textedit = result_textedit
+    def __init__(self):
         self.learning_rate_rbm = 0.001
         self.batch_size_rbm = 100
         self.n_epochs_rbm = 50
@@ -102,15 +103,17 @@ class DBNCLAS():  # 这是一个多输入单输出模型
 
     def get_model_accuracy(self):
         loss, acc = self.model.evaluate(self.x_test, self.y_test)
-        y_predict = self.model.predict_classes(self.x_test)
-        acc_mat = confusion_matrix(self.y_test, y_predict)  
-        return acc, acc_mat
+        y_pred = self.model.predict_classes(self.x_test)
+        acc_mat = confusion_matrix(self.y_test, y_pred)  
+        acc_report = classification_report(self.y_test, y_pred, target_names=['失稳', '稳定'])
+        return acc, acc_mat, acc_report
 
     def save_model(self, name):
         self.model.save(name)
         return 
 
     def load_model(self, name):
+        backend.clear_session()
         self.model = load_model(name)
         return
 
@@ -188,6 +191,23 @@ class DBNCLAS():  # 这是一个多输入单输出模型
         self.model.compile(loss='binary_crossentropy', optimizer=adam, metrics=['accuracy'])
         history = self.model.fit(x_train, y_train, validation_split=self.validation_split, 
             batch_size=self.batch_size_nn, epochs=self.n_epochs_nn, verbose=1, callbacks=[callback])
+
+        plt.figure(1)        
+        plt.plot(history.history['loss'])
+        plt.plot(history.history['val_loss'])
+        plt.title('模型训练损失')
+        plt.ylabel('损失')
+        plt.xlabel('代')
+        plt.legend(['训练集', '验证集'])
+
+        plt.figure(2)        
+        plt.plot(history.history['acc'])
+        plt.plot(history.history['val_acc'])
+        plt.title('模型训练准确率')
+        plt.ylabel('准确率')
+        plt.xlabel('代')
+        plt.legend(['训练集', '验证集'])
+        plt.show()
 
         return history
 

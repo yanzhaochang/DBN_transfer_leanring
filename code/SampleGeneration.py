@@ -13,8 +13,6 @@ class SGB():
         self.sample_num = sample_num
         self.pallel_num = pallel_num
         self.test_size = test_size
-
-        self.set_system_security_constraint('.\\参数设置\\系统安全约束.csv')
         return 
 
     def load_future_scenario(self, raw_file, dyr_file):
@@ -25,7 +23,6 @@ class SGB():
     def set_system_security_constraint(self, path_name):
         data = pd.read_csv(path_name, header=0, engine='python')
         self.min_frequency = data.loc[0, '最低频率']
-        print(self.min_frequency)
         return 
 
     def set_load_shedding_location(self, path_name):
@@ -47,41 +44,19 @@ class SGB():
         self.hvdc_block = data 
         return 
 
-    def generate_load_shedding_sample_with_parallel_method(self, process_textedit):
+    def get_shedding_percent(self):
         shedding_percent = np.zeros((self.sample_num, len(self.loads_shedding)))
         for i in range(self.sample_num):
             for j in range(len(self.loads_shedding)):
                 shedding_percent[i, j] = random.uniform(0, self.max_percent[j])
-        all_sample_feature = []
-        k = 0
-        for i in range(1000):
-            if k < self.sample_num:
-                w = 10 
-            else:
-                w = self.sample_num - k 
+        return shedding_percent
 
-            simulation_pars = []
-            for j in range(w):
-                n = k + j
-                par = {'sample_num': n, 'scale_percent': shedding_percent[n, :]}
-                simulation_pars.append(par)
-
-            p = multiprocessing.Pool(processes=self.pallel_num) 
-            sample_feature = p.map(self.generate_load_shedding_sample, simulation_pars)
-            p.close()
-            p.join()
-            all_sample_feature = all_sample_feature + sample_feature
-            for a in range(len(sample_feature)):
-                process_textedit.append('样本{}的最低频率{}'.format(sample_feature[a][0], sample_feature[a][1]))
-            process_textedit.verticalScrollBar().setValue(process_textedit.verticalScrollBar().maximum()) 
-            QApplication.processEvents() 
-            k = k + w 
-            if k >= shedding_percent.shape[0]:
-                break
-
-        all_sample_feature = np.array(all_sample_feature)
-        self.spilt_sample(shedding_percent, all_sample_feature)
-        return 
+    def generate_load_shedding_sample_with_parallel_method(self, simulation_pars):
+        p = multiprocessing.Pool(processes=self.pallel_num) 
+        sample_feature = p.map(self.generate_load_shedding_sample, simulation_pars)
+        p.close()
+        p.join()   
+        return sample_feature    
 
     def generate_load_shedding_sample(self, simulation_pars):
         from stepspy import STEPS
@@ -187,22 +162,21 @@ class SGB():
         min_frequency = self.get_min_frequency('.\\仿真\\无控制下校验.csv')
         return min_frequency
 
+
 class SGTL():
     def __init__(self):
         self.sample_scale = 0.01
         self.min_frequency_set = 49.5
         self.__parameter = {'偏移系数': 0.4, '分布系数': 0.01, '样本数': 100, '并行数': 5}
-        self.set_system_security_constraint('.\\参数设置\\系统安全约束.csv')
-        self.set_load_shedding_location('.\\参数设置\\切负荷站.csv')
-        self.set_blocking_hvdc_location('.\\参数设置\\闭锁直流.csv')
+
  
     def set_system_security_constraint(self, path_name):
         data = pd.read_csv(path_name, header=0, engine='python')
         self.min_frequency = data.loc[0, '最低频率']
   
-    def set_future_scenario(self, future_scenario_raw):
-        self.future_scenario_raw = future_scenario_raw
-        self.future_scenario_dyr = '.\\参数设置\\bench_shandong_change_with_gov.dyr'
+    def load_future_scenario(self, raw_file, dyr_file):
+        self.raw_file = raw_file
+        self.dyr_file = dyr_file 
 
     def set_parameter_data(self, par_name, value):
         self.__parameter[par_name] = value
@@ -234,8 +208,8 @@ class SGTL():
             
         from stepspy import STEPS 
         simulator = STEPS(is_default=False, log_file='.\log\log.txt')
-        simulator.load_powerflow_data(self.future_scenario_raw, 'PSS/E')  
-        simulator.load_dynamic_data(self.future_scenario_dyr, 'PSS/E')
+        simulator.load_powerflow_data(self.raw_file, 'PSS/E')  
+        simulator.load_dynamic_data(self.dyr_file, 'PSS/E')
         simulator.solve_powerflow('PQ')
         
         buses = simulator.get_all_buses()
@@ -285,7 +259,9 @@ class SGTL():
         upper_num = self.__parameter['样本数'] - low_num
         percent = []
 
-        for item in best_scheme:
+
+        for k in range(len(best_scheme)):
+            item = best_scheme[k]
             a = np.random.normal(loc=item, scale=self.__parameter['分布系数'], size=5000)
             b = []
             for i in range(len(a)):
@@ -296,8 +272,8 @@ class SGTL():
                 if len(b) == self.__parameter['样本数']:
                     break
             for i in range(len(b)):
-                if b[i] > 0.2:
-                    b[i] = 0.2 
+                if b[i] > self.max_percent[k]:
+                    b[i] = self.max_percent[k] 
                 elif b[i] < 0.0:
                     b[i] = 0.0
                 else:
@@ -317,42 +293,19 @@ class SGTL():
             csv_write = csv.writer(f)
             csv_write.writerow(self.loads_shedding)
             csv_write.writerows(shedding_percent)
-        return 
 
-    def generate_load_shedding_sample_with_parallel_method_in_future_scenario(self, process_textedit):
-        shedding_percent = pd.read_csv('.\\训练数据\\x_train_tl.csv', header=0, engine='python')
-        shedding_percent = shedding_percent.values 
-        all_sample_feature = []
-        k = 0
-        for i in range(100):
-            if k < shedding_percent.shape[0]:
-                w = 10 
-            else:
-                w = shedding_percent.shape[0] - k 
-
-            simulation_pars = []
-            for j in range(w):
-                n = k + j
-                par = {'sample_num': n, 'scale_percent': shedding_percent[n, :]}
-                simulation_pars.append(par)
-
-            p = multiprocessing.Pool(processes=self.__parameter['并行数']) 
-            sample_feature = p.map(self.generate_load_shedding_sample, simulation_pars)
-            p.close()
-            p.join()
-            all_sample_feature = all_sample_feature + sample_feature
-            for a in range(len(sample_feature)):
-                process_textedit.append('样本{}的最低频率{}'.format(sample_feature[a][0], sample_feature[a][1]))
-            process_textedit.verticalScrollBar().setValue(process_textedit.verticalScrollBar().maximum()) 
-            QApplication.processEvents() 
-            k = k + w 
-            if k >= shedding_percent.shape[0]:
-                break
-        with open('.\\训练数据\\y_train_tl.csv', 'w', newline='') as f: 
+        with open('.\\参数设置\\模型更新样本参数.csv', 'w', newline='') as f: 
             csv_write = csv.writer(f)
-            csv_write.writerow(['编号', '频率', '标签'])
-            csv_write.writerows(all_sample_feature)                
-        return 
+            csv_write.writerow(['分布系数', '偏移系数'])
+            csv_write.writerow([self.__parameter['分布系数'], self.__parameter['偏移系数']])        
+        return np.array(shedding_percent)
+
+    def generate_load_shedding_sample_with_parallel_method(self, simulation_pars):
+        p = multiprocessing.Pool(processes=self.__parameter['并行数']) 
+        sample_feature = p.map(self.generate_load_shedding_sample, simulation_pars)
+        p.close()
+        p.join()     
+        return sample_feature
 
     def generate_load_shedding_sample(self, simulation_pars):
         from stepspy import STEPS
@@ -360,8 +313,8 @@ class SGTL():
         scale_percent = simulation_pars['scale_percent']
 
         simulator = STEPS(is_default=False, log_file='.\log\log_{}.txt'.format(sample_num))
-        simulator.load_powerflow_data(self.future_scenario_raw, 'PSS/E')  
-        simulator.load_dynamic_data(self.future_scenario_dyr, 'PSS/E')
+        simulator.load_powerflow_data(self.raw_file, 'PSS/E')  
+        simulator.load_dynamic_data(self.dyr_file, 'PSS/E')
         simulator.solve_powerflow('PQ')
  
         buses = simulator.get_all_buses()
@@ -392,3 +345,8 @@ class SGTL():
         else:
             return [sample_num, min_frequency, 0]
     
+    def save_sample_feature(self, all_sample_feature):
+        with open('.\\训练数据\\y_train_tl.csv', 'w', newline='') as f: 
+            csv_write = csv.writer(f)
+            csv_write.writerow(['编号', '频率', '标签'])
+            csv_write.writerows(all_sample_feature)     
