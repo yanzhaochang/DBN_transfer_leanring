@@ -10,9 +10,9 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 
-
-from UI_BasicModel import UI_SampleGeneration, ModelTraining, AMSOD
-from UI_OnlineOptimizer import UI_SGTL, MTTL, AMSODTL
+from UI_SampleGeneration import UI_SGBM, UI_SGTL
+from UI_ModelTraining import UI_DBNBM, UI_DBNTL
+from UI_Optimizer import UI_AAMO
 
 
 class MainWindow(QMainWindow):
@@ -21,6 +21,7 @@ class MainWindow(QMainWindow):
         self.main_table = QTabWidget()
         self.setCentralWidget(self.main_table)
         self.setWindowTitle('电力系统紧急切负荷优化软件')
+        self.setWindowIcon(QIcon('.\\logo\\安全.png'))
         self.main_table.setStyleSheet('background-color: grey')
         self.main_table.setTabPosition(QTabWidget.South)
         
@@ -44,15 +45,17 @@ class MainWindow(QMainWindow):
         basic_model_training = bar.addMenu('辅助模型训练')
         basic_model_training.addAction('样本生成')
         basic_model_training.addAction('模型训练')
-        basic_model_training.addAction('代理辅助模型优化')
         basic_model_training.triggered[QAction].connect(self.train_basic_model)
 
-        online_optimizer = bar.addMenu('在线优化')
-        online_optimizer.addAction('样本生成')
-        online_optimizer.addAction('模型迁移')
-        online_optimizer.addAction('代理辅助模型优化')
-        online_optimizer.triggered[QAction].connect(self.optimize_load_shedding_online)
+        model_update = bar.addMenu('模型更新')
+        model_update.addAction('样本生成')
+        model_update.addAction('模型微调')
+        model_update.triggered[QAction].connect(self.update_model)
     
+        optimizer = bar.addMenu('代理辅助优化')
+        optimizer.addAction('启动')
+        optimizer.triggered[QAction].connect(self.start_scenraio_optimizer)
+
         setting = bar.addMenu('帮助')
         setting.addAction('版权信息')
         setting.addAction('优化计算说明')
@@ -85,6 +88,13 @@ class MainWindow(QMainWindow):
             self.display_network_data() 
         
         elif q.text() == '导入切负荷站设置':
+            try:
+                object.__getattribute__(self, 'scenario_table')
+            except:
+                dialog = QMessageBox(QMessageBox.Warning, '警告', '未导入电网运行文件！！！')
+                dialog.exec_()
+                return 
+
             openfile_name = QFileDialog.getOpenFileName(self, '导入切负荷站设置', '' ,'file(*.csv)')
             if len(openfile_name[0]) == 0:
                 return
@@ -95,11 +105,25 @@ class MainWindow(QMainWindow):
             self.text_output.append('导入切负荷站设置： ' + path_name)
 
         elif q.text() == '保存切负荷站设置': 
+            try:
+                object.__getattribute__(self, 'scenario_table')
+            except:
+                dialog = QMessageBox(QMessageBox.Warning, '警告', '未导入电网运行文件！！！')
+                dialog.exec_()
+                return 
+
             self.scenario_table.save_loads_shedding_location('.\\参数设置\\切负荷站.csv') 
             self.text_output.append('保存切负荷站设置： ' + '.\\参数设置\\切负荷站.csv')
             return 
 
         elif q.text() == '导入直流闭锁设置':
+            try:
+                object.__getattribute__(self, 'scenario_table')
+            except:
+                dialog = QMessageBox(QMessageBox.Warning, '警告', '未导入电网运行文件！！！')
+                dialog.exec_()
+                return 
+
             openfile_name = QFileDialog.getOpenFileName(self, '导入直流闭锁设置', '' ,'file(*.csv)')
             if len(openfile_name[0]) == 0:
                 return
@@ -110,10 +134,23 @@ class MainWindow(QMainWindow):
             self.text_output.append('导入闭锁直流设置： ' + path_name)
 
         elif q.text() == '保存直流闭锁设置':
+            try:
+                object.__getattribute__(self, 'scenario_table')
+            except:
+                dialog = QMessageBox(QMessageBox.Warning, '警告', '未导入电网运行文件！！！')
+                dialog.exec_()
+                return 
             self.scenario_table.save_hvdc_blocking_location('.\\参数设置\\闭锁直流.csv')  
             self.text_output.append('保存闭锁直流设置： ' + '.\\参数设置\\闭锁直流.csv')    
 
         elif q.text() == '安全约束设置':
+            try:
+                object.__getattribute__(self, 'scenario_table')
+            except:
+                dialog = QMessageBox(QMessageBox.Warning, '警告', '未导入电网运行文件！！！')
+                dialog.exec_()
+                return 
+
             dialog = SecurityConstraint(self.text_output)
             dialog.exec_()            
         else:
@@ -122,31 +159,35 @@ class MainWindow(QMainWindow):
     
     def train_basic_model(self, q):
         if q.text() == '样本生成':
-            dialog = UI_SampleGeneration()
+            dialog = UI_SGBM()
             dialog.exec_() 
+
         elif q.text() == '模型训练':    
-            dialog = ModelTraining()
+            dialog = UI_DBNBM()
             dialog.exec_() 
-        elif q.text() == '代理辅助模型优化':    
-            dialog = AMSOD()
-            dialog.exec_()
+
         else:
             return 
 
-    def optimize_load_shedding_online(self, q):
+    def update_model(self, q):
         if q.text() == '样本生成':
             dialog = UI_SGTL()
             dialog.exec_()
-        elif q.text() == '模型迁移':
-            dialog = MTTL()
-            dialog.exec_()
-        elif q.text() == '代理辅助模型优化':    
-            dialog = AMSODTL()
+        elif q.text() == '模型微调':
+            dialog = UI_DBNTL()
             dialog.exec_()                 
         else:
-            return 
-        return 
+            return  
    
+    def start_scenraio_optimizer(self, q):
+        if q.text() == '启动':
+            dialog = UI_AAMO()
+            dialog.exec_()
+        else:
+            return             
+
+
+
     def display_network_data(self):
         self.main_table.setStyleSheet('background-color: white')
         self.scenario_table = Table_Show(self.main_table, self.simulator, self.text_output)
@@ -201,7 +242,7 @@ class Table_Show(QWidget):
             ANGLE_DEG = self.simulator.get_bus_data(buses[i], 'F', 'ANGLE_DEG')
             ANGLE_DEG = round(ANGLE_DEG, 4)
             self.tab_raw_bus.setItem(i, 6, QTableWidgetItem(str(ANGLE_DEG))) 
-
+        #self.tab_raw_bus.verticalScrollBar().setValue(rows)
         return 
         
     def display_generator_table(self):  #加载发电机数据
