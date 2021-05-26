@@ -12,13 +12,10 @@ from keras.callbacks import EarlyStopping
 from sklearn.neural_network import BernoulliRBM
 from sklearn.metrics import confusion_matrix, classification_report
 
-import matplotlib.pyplot as plt
-plt.rcParams['font.sans-serif'] = ['SimHei'] 
-plt.rcParams['axes.unicode_minus'] = False
 
 
 class DBNCLAS():  # 这是一个多输入单输出模型
-    def __init__(self):
+    def __init__(self, hidden_layer_structure=[50, 10]):
         self.learning_rate_rbm = 0.001
         self.batch_size_rbm = 100
         self.n_epochs_rbm = 50
@@ -34,11 +31,7 @@ class DBNCLAS():  # 这是一个多输入单输出模型
         self.verbose_nn = 1
         self.decay_rate = 0
 
-        self.hidden_layer_structure = [1]
-        self.weight_rbm = []
-        self.bias_rbm = []
-
-        return 
+        self.hidden_layer_structure = hidden_layer_structure
 
     def load_train_data(self, x_train_path, y_train_path, validation_split):
         x_train = pd.read_csv(x_train_path, header=0, encoding='gbk', engine='python')
@@ -141,6 +134,9 @@ class DBNCLAS():  # 这是一个多输入单输出模型
         return
 
     def pretrain(self):
+        self.weight_rbm = []
+        self.bias_rbm = []
+
         x_train = self.x_train
         y_train = self.y_train
 
@@ -161,6 +157,7 @@ class DBNCLAS():  # 这是一个多输入单输出模型
         return        
 
     def build_model(self):
+        backend.clear_session()
         self.model = Sequential()
         hidden_layer_structure = self.get_hidden_layer_structure()
         input_dim = self.x_train.shape[1]
@@ -192,22 +189,6 @@ class DBNCLAS():  # 这是一个多输入单输出模型
         history = self.model.fit(x_train, y_train, validation_split=self.validation_split, 
             batch_size=self.batch_size_nn, epochs=self.n_epochs_nn, verbose=1, callbacks=[callback])
 
-        plt.figure(1)        
-        plt.plot(history.history['loss'])
-        plt.plot(history.history['val_loss'])
-        plt.title('模型训练损失')
-        plt.ylabel('损失')
-        plt.xlabel('代')
-        plt.legend(['训练集', '验证集'])
-
-        plt.figure(2)        
-        plt.plot(history.history['acc'])
-        plt.plot(history.history['val_acc'])
-        plt.title('模型训练准确率')
-        plt.ylabel('准确率')
-        plt.xlabel('代')
-        plt.legend(['训练集', '验证集'])
-        plt.show()
 
         return history
 
@@ -354,32 +335,13 @@ class DBNTL():  # 定义一个迁移学习模型对象
         return
 
     def fine_tune(self):
-        callback = EarlyStopping(monitor='val_acc', min_delta=1e-6, patience=50, verbose=1, mode='max', restore_best_weights=True)
+        callback = EarlyStopping(monitor='val_acc', min_delta=1e-4, patience=50, verbose=1, mode='max', restore_best_weights=True)
         
         adam = Adam(lr=self.learning_rate_nn, decay=self.decay_rate)
         self.target_model.compile(loss='binary_crossentropy', optimizer=adam, metrics=['accuracy'])
         
         history = self.target_model.fit(self.x_train, self.y_train, validation_split=0.2, 
             batch_size=self.batch_size_nn, epochs=self.n_epochs_nn, verbose=1, callbacks=[callback])
-        
-
-        plt.figure(1)        
-        plt.plot(history.history['loss'])
-        plt.plot(history.history['val_loss'])
-        plt.title('model training loss')
-        plt.ylabel('loss')
-        plt.xlabel('epoch')
-        plt.legend(['train', 'val'])
-
-        plt.figure(2)        
-        plt.plot(history.history['acc'])
-        plt.plot(history.history['val_acc'])
-        plt.title('model training acc')
-        plt.ylabel('acc')
-        plt.xlabel('epoch')
-        plt.legend(['train', 'val'])
-
-        plt.show() 
         
         return history
         
