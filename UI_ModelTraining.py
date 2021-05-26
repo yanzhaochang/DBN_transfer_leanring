@@ -3,7 +3,13 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
- 
+
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+plt.rcParams['font.sans-serif'] = ['SimHei'] 
+plt.rcParams['axes.unicode_minus'] = False
+
 import sys 
 sys.path.append('.\\code')
 from ModelDBN import DBNCLAS, DBNTL
@@ -12,9 +18,9 @@ from ModelDBN import DBNCLAS, DBNTL
 class UI_DBNBM(QDialog):
     def __init__(self):
         super(UI_DBNBM, self).__init__()
-        self.setWindowTitle('模型训练')
+        self.setWindowTitle('深度置信网络模型训练')
         self.resize(800, 600)
-        self.setWindowIcon(QIcon('.\\logo\\安全.png'))
+        self.setWindowIcon(QIcon('.\\data\\safety.png'))
 
         self.mainlayout = QGridLayout()
         self.setLayout(self.mainlayout)
@@ -65,13 +71,13 @@ class UI_DBNBM(QDialog):
 
         training_feature_label = QLabel('特征集')
         self.training_feature_line = QLineEdit()
-        self.training_feature_line.setText('.\\训练数据\\x_train_example.csv')
+        self.training_feature_line.setText('.\\data\\x_train_example.csv')
         training_feature_button = QPushButton('选择')
         training_feature_button.clicked.connect(self.choose_training_feature_data)
 
         training_label_label = QLabel('标签集')
         self.training_label_line = QLineEdit()
-        self.training_label_line.setText('.\\训练数据\\y_train_example.csv')
+        self.training_label_line.setText('.\\data\\y_train_example.csv')
         training_label_button = QPushButton('选择')
         training_label_button.clicked.connect(self.choose_training_label_data)
 
@@ -85,7 +91,7 @@ class UI_DBNBM(QDialog):
 
         training_model_label = QLabel('训练模型')
         self.training_model_line = QLineEdit()
-        self.training_model_line.setText('.\\代理模型\\scenario_model.h5')
+        self.training_model_line.setText('.\\models\\scenario_model.h5')
         training_model_button = QPushButton('选择')
         training_model_button.clicked.connect(self.choose_training_model)
 
@@ -107,19 +113,19 @@ class UI_DBNBM(QDialog):
 
         test_feature_label = QLabel('特征集')
         self.test_feature_line = QLineEdit()
-        self.test_feature_line.setText('.\\训练数据\\x_test_example.csv')
+        self.test_feature_line.setText('.\\data\\x_test_example.csv')
         test_feature_button = QPushButton('选择')
         test_feature_button.clicked.connect(self.choose_test_feature_data)
 
         test_label_label = QLabel('标签集')
         self.test_label_line = QLineEdit()
-        self.test_label_line.setText('.\\训练数据\\y_test_example.csv')
+        self.test_label_line.setText('.\\data\\y_test_example.csv')
         test_label_button = QPushButton('选择')
         test_label_button.clicked.connect(self.choose_test_label_data)
 
         test_model_label = QLabel('测试模型')
         self.test_model_line = QLineEdit()
-        self.test_model_line.setText('.\\代理模型\\scenario_model.h5')
+        self.test_model_line.setText('.\\models\\scenario_model.h5')
         test_model_button = QPushButton('选择')
         test_model_button.clicked.connect(self.choose_test_model)
 
@@ -203,7 +209,7 @@ class UI_DBNBM(QDialog):
         self.rbm_batch_size_spinbox = QSpinBox()
         self.rbm_batch_size_spinbox.setMinimum(10)
         self.rbm_batch_size_spinbox.setMaximum(500)
-        self.rbm_batch_size_spinbox.setValue(50)
+        self.rbm_batch_size_spinbox.setValue(100)
         self.rbm_batch_size_spinbox.setSingleStep(10)
 
         self.rbm_training_group_layout.addWidget(rbm_epochs_label, 0, 0)
@@ -253,7 +259,7 @@ class UI_DBNBM(QDialog):
         self.nn_batch_size_spinbox = QSpinBox()
         self.nn_batch_size_spinbox.setMinimum(10)
         self.nn_batch_size_spinbox.setMaximum(500)
-        self.nn_batch_size_spinbox.setValue(50)
+        self.nn_batch_size_spinbox.setValue(100)
         self.nn_batch_size_spinbox.setSingleStep(10)
 
         self.finetune_group_layout.addWidget(nn_epochs_label, 0, 0)
@@ -305,16 +311,14 @@ class UI_DBNBM(QDialog):
         path_name = openfile_name[0]
         if len(path_name) == 0:
             return
-        self.training_label_line.setText(path_name)   
-        return 
+        self.training_label_line.setText(path_name)    
     
     def choose_training_model(self):
         path_name = QFileDialog.getSaveFileName(self, '保存模型', '' , '(*.h5)')
         if len(path_name[0]) == 0:
             return 
         self.training_model_line.setText(path_name[0])  
-        self.test_model_line.setText(path_name[0])       
-        return 
+        self.test_model_line.setText(path_name[0])        
 
     def train_dbn_model(self):
         layer_1 = self.layer_1_spinbox.value()
@@ -346,60 +350,55 @@ class UI_DBNBM(QDialog):
         if len(x_train_path) == 0 or len(y_train_path) == 0:
             QMessageBox.warning(self,'警告','未选择训练集', QMessageBox.Yes | QMessageBox.No,QMessageBox.Yes)
             return         
+        model_path = self.training_model_line.text()
+       
+        parameter = {'层结构': layer_structure, 'RBM代数': rbm_epochs_number, 'RBM学习率': rbm_learning_rate, 
+            'RBM批数':rbm_batch_size, '神经网络学习率': nn_learning_rate, '神经网络学习率衰减': nn_decay_rate, 
+            '正则化系数': regularizer_l2, '神经网络代数': nn_epochs_number, '神经网络批数': nn_batch_size,
+            '验证集比例': val_split, '特征路径': x_train_path, '标签路径': y_train_path, '模型保存路径': model_path}
 
-        self.model = DBNCLAS()  # 初始化
-        self.model.load_train_data(x_train_path, y_train_path, val_split)  # 加载训练数据和测试数据
-        self.model.set_hidden_layer_structure(layer_structure)
-        
-        self.model.set_rbm_epochs_number(rbm_epochs_number)  # RBM学习次数
-        self.model.set_rbm_learning_rate(rbm_learning_rate)  # RBM学习率
-        self.model.set_rbm_batch_size(rbm_batch_size)  # RBM批处理
-
-        self.model.set_nn_learning_rate(nn_learning_rate)  # 神经网络学习率
-        self.model.set_nn_decay_rate(nn_decay_rate)  # 学习率下降参数
-        self.model.set_hidden_layer_regularizer_l2(regularizer_l2)   # 设置l2正则化系数
-        self.model.set_nn_epochs_number(nn_epochs_number)  # 学习次数
-        self.model.set_nn_batch_size(nn_batch_size)  # 学习批处理个数
-
+        self.model_training_thread.set_training_parameter(parameter) 
         self.training_button.setEnabled(False)
-        self.model_training_thread.set_training_model(self.model)
         self.result_textedit.append('模型正在训练中…………')
-
         self.model_training_thread.start() 
 
     def finish_model_training(self, finish_sig):
         self.training_button.setEnabled(True)
         self.result_textedit.append('模型训练完成…………')
-        model_path = self.training_model_line.text()
-        if len(model_path) != 0:
-            self.model.save_model(model_path)  # 保存模型
+        plt.figure(1)        
+        plt.plot(finish_sig['loss'])
+        plt.plot(finish_sig['val_loss'])
+        plt.title('模型训练损失')
+        plt.ylabel('损失')
+        plt.xlabel('代')
+        plt.legend(['训练集', '验证集'])
+
+        plt.figure(2)        
+        plt.plot(finish_sig['acc'])
+        plt.plot(finish_sig['val_acc'])
+        plt.title('模型训练准确率')
+        plt.ylabel('准确率')
+        plt.xlabel('代')
+        plt.legend(['训练集', '验证集'])
+        plt.show() 
 
     def choose_test_feature_data(self):
         openfile_name = QFileDialog.getOpenFileName(self, '测试特征集', '' ,'file(*.csv)')
         if len(openfile_name[0]) == 0:
-            return
-                
-        path_name = openfile_name[0]
-        if len(path_name) == 0:
-            return
-        self.test_feature_line.setText(path_name)    
+            return           
+        self.test_feature_line.setText(openfile_name[0])    
 
     def choose_test_label_data(self):
         openfile_name = QFileDialog.getOpenFileName(self, '测试标签', '' ,'file(*.csv)')
         if len(openfile_name[0]) == 0:
             return
-                
-        path_name = openfile_name[0]
-        if len(path_name) == 0:
-            return
-        self.test_label_line.setText(path_name)   
+        self.test_label_line.setText(openfile_name[0])   
     
     def choose_test_model(self):
         openfile_name = QFileDialog.getOpenFileName(self, '测试模型', '' ,'file(*.h5)')
         if len(openfile_name[0]) == 0:
             return      
-        path_name = openfile_name[0]
-        self.test_model_line.setText(path_name)        
+        self.test_model_line.setText(openfile_name[0])        
     
     def test_dbn_model(self):
         model_path = self.test_model_line.text()
@@ -421,42 +420,52 @@ class UI_DBNBM(QDialog):
         self.result_textedit.append('模型精度评估: \n{}'.format(report))     
 
 
-
 class ModelTrainingThread(QThread):#线程类
-    finish_signal = pyqtSignal(str)  
+    finish_signal = pyqtSignal(dict)  
     def __init__(self):
         super(ModelTrainingThread, self).__init__()
         return 
         
-    def set_training_model(self, model):
-        self.model = model
+    def set_training_parameter(self, parameter):
+        self.parameter = parameter
         return 
 
     def run(self): #线程执行函数
-        self.model.pretrain()  # 预训练
-        history = self.model.fine_tune()  # 微调
-        self.finish_signal.emit('训练完成')
-       
+        model = DBNCLAS(self.parameter['层结构'])  # 初始化
+        model.load_train_data(self.parameter['特征路径'], self.parameter['标签路径'], self.parameter['验证集比例'])  
         
+        model.set_rbm_epochs_number(self.parameter['RBM代数'])  # RBM学习次数
+        model.set_rbm_learning_rate(self.parameter['RBM学习率'])  # RBM学习率
+        model.set_rbm_batch_size(self.parameter['RBM批数'])  # RBM批处理
+
+        model.set_nn_learning_rate(self.parameter['神经网络学习率'])  # 神经网络学习率
+        model.set_nn_decay_rate(self.parameter['神经网络学习率衰减'])  # 学习率下降参数
+        model.set_hidden_layer_regularizer_l2(self.parameter['正则化系数'])   # 设置l2正则化系数
+        model.set_nn_epochs_number(self.parameter['神经网络代数'])  # 学习次数
+        model.set_nn_batch_size(self.parameter['神经网络批数'])  # 学习批处理个数
+
+        model.pretrain()  # 预训练
+        history = model.fine_tune()  # 微调
+        model.save_model(self.parameter['模型保存路径'])
+        self.finish_signal.emit(history.history)
+
+        
+
 class UI_DBNTL(QDialog):
     def __init__(self):
         super(UI_DBNTL, self).__init__()   
         self.resize(600, 600)
         self.setWindowTitle('模型迁移')
-        self.setWindowIcon(QIcon('.\\logo\\安全.png'))
+        self.setWindowIcon(QIcon('.\\data\\safety.png'))
         self.mainlayout = QGridLayout()
         self.setLayout(self.mainlayout)
         self.training_group = QGroupBox('模型训练')
-        self.train_prosess_group = QGroupBox('训练过程信息')
 
         self.mainlayout.addWidget(self.training_group, 0, 0) 
-        self.mainlayout.addWidget(self.train_prosess_group, 1, 0)
          
         self.init_training_group()
         self.init_training_data_group()
-        self.init_training_parameter_group()
-        self.init_train_prosess_group()         
-        
+        self.init_training_parameter_group()         
 
     def init_training_group(self):
         self.training_group_layout = QGridLayout()
@@ -474,13 +483,13 @@ class UI_DBNTL(QDialog):
 
         training_feature_label = QLabel('特征集')
         self.training_feature_line = QLineEdit()
-        self.training_feature_line.setText('.\\训练数据\\x_train_example_tl.csv')
+        self.training_feature_line.setText('.\\data\\x_train_example_tl.csv')
         training_feature_button = QPushButton('选择')
         training_feature_button.clicked.connect(self.choose_training_feature_data)
 
         training_label_label = QLabel('标签集')
         self.training_label_line = QLineEdit()
-        self.training_label_line.setText('.\\训练数据\\y_train_example_tl.csv')
+        self.training_label_line.setText('.\\data\\y_train_example_tl.csv')
         training_label_button = QPushButton('选择')
         training_label_button.clicked.connect(self.choose_training_label_data)
 
@@ -494,13 +503,13 @@ class UI_DBNTL(QDialog):
 
         source_model_label = QLabel('源模型')
         self.source_model_line = QLineEdit()
-        self.source_model_line.setText('.\\代理模型\\model_source_example.h5')
+        self.source_model_line.setText('.\\models\\model_source_example.h5')
         source_model_button = QPushButton('选择')
         source_model_button.clicked.connect(self.choose_source_model)
 
         target_model_label = QLabel('目标模型')
         self.target_model_line = QLineEdit()
-        self.target_model_line.setText('.\\代理模型\\target_model.h5')
+        self.target_model_line.setText('.\\models\\target_model.h5')
         target_model_button = QPushButton('选择')
         target_model_button.clicked.connect(self.choose_target_model)
 
@@ -544,22 +553,22 @@ class UI_DBNTL(QDialog):
         self.regularizer_l2_spinbox.setDecimals(6) 
         self.regularizer_l2_spinbox.setMinimum(0.0)
         self.regularizer_l2_spinbox.setMaximum(1.0)
-        self.regularizer_l2_spinbox.setValue(0.0001)
+        self.regularizer_l2_spinbox.setValue(0.00001)
         self.regularizer_l2_spinbox.setSingleStep(0.00001)                
 
         nn_decay_rate_label = QLabel('学习率下降')
         self.nn_decay_rate_spinbox = QDoubleSpinBox()
-        self.nn_decay_rate_spinbox.setDecimals(5)
+        self.nn_decay_rate_spinbox.setDecimals(6)
         self.nn_decay_rate_spinbox.setMinimum(0.0)
         self.nn_decay_rate_spinbox.setMaximum(0.1)
-        self.nn_decay_rate_spinbox.setValue(0.0010)
-        self.nn_decay_rate_spinbox.setSingleStep(0.00001)        
+        self.nn_decay_rate_spinbox.setValue(0.00001)
+        self.nn_decay_rate_spinbox.setSingleStep(0.000001)        
         
         nn_batch_size = QLabel('批数')
         self.nn_batch_size_spinbox = QSpinBox()
         self.nn_batch_size_spinbox.setMinimum(10)
         self.nn_batch_size_spinbox.setMaximum(500)
-        self.nn_batch_size_spinbox.setValue(50)
+        self.nn_batch_size_spinbox.setValue(100)
         self.nn_batch_size_spinbox.setSingleStep(10)
 
         self.finetune_group_layout.addWidget(nn_epochs_label, 0, 0)
@@ -579,13 +588,6 @@ class UI_DBNTL(QDialog):
         self.training_button.clicked.connect(self.fine_tune_dbn_model)
         self.finetune_group_layout.addWidget(self.training_button, 3, 4)
 
-    def init_train_prosess_group(self):
-        self.test_result_group_layout = QGridLayout()
-        self.train_prosess_group.setLayout(self.test_result_group_layout)
-        self.result_textedit = QTextEdit()
-        self.result_textedit.setPlainText('训练过程信息')
-        self.test_result_group_layout.addWidget(self.result_textedit, 0, 0)         
-
     def choose_training_feature_data(self):
         openfile_name = QFileDialog.getOpenFileName(self, '训练特征集', '' ,'file(*.csv)')
         if len(openfile_name[0]) == 0:
@@ -601,33 +603,19 @@ class UI_DBNTL(QDialog):
         openfile_name = QFileDialog.getOpenFileName(self, '训练标签', '' ,'file(*.csv)')
         if len(openfile_name[0]) == 0:
             return
-                
-        path_name = openfile_name[0]
-        if len(path_name) == 0:
-            return
-        self.training_label_line.setText(path_name)   
-        return 
+        self.training_label_line.setText(openfile_name[0])    
     
     def choose_source_model(self):
         openfile_name = QFileDialog.getOpenFileName(self, '源模型', '' ,'file(*.h5)')
         if len(openfile_name[0]) == 0:
             return
-                
-        path_name = openfile_name[0]
-        if len(path_name) == 0:
-            return
-        self.source_model_line.setText(path_name)       
-        return
+        self.source_model_line.setText(openfile_name[0])       
 
     def choose_target_model(self):
         openfile_name = QFileDialog.getSaveFileName(self, '保存模型', '' ,'file(*.h5)')
         if len(openfile_name[0]) == 0:
             return
-                
-        path_name = openfile_name[0]
-        if len(path_name) == 0:
-            return
-        self.target_model_line.setText(path_name)         
+        self.target_model_line.setText(openfile_name[0])         
 
     def fine_tune_dbn_model(self):
         source_model_path = self.source_model_line.text()
@@ -659,21 +647,25 @@ class UI_DBNTL(QDialog):
         model.build_target_model()
         history = model.fine_tune()  # 微调
         
-        for i in range(len(history.history['acc'])):
-            self.result_textedit.append('训练{}训练集损失{:.4f}--准确率{:.4f}--验证集损失{:.4f}--准确率{:.4f}'.format(i+1, 
-                history.history['loss'][i], history.history['acc'][i], history.history['val_loss'][i], history.history['val_acc'][i]))
-        QApplication.processEvents()
         model_path = self.target_model_line.text()
         if len(model_path) != 0:
             model.save_model(model_path)  # 保存模型
+        plt.figure(1)        
+        plt.plot(history.history['loss'])
+        plt.plot(history.history['val_loss'])
+        plt.title('model training loss')
+        plt.ylabel('loss')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'val'])
 
+        plt.figure(2)        
+        plt.plot(history.history['acc'])
+        plt.plot(history.history['val_acc'])
+        plt.title('model training acc')
+        plt.ylabel('acc')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'val'])
+        plt.show() 
         return 
 
-    def finish_model_training(self, finish_sig):
-        self.training_button.setEnabled(True)
-        self.result_textedit.append('模型训练完成…………')
-        model_path = self.training_model_line.text()
-        if len(model_path) != 0:
-            self.model.save_model(model_path)  # 保存模型
-        return 
 

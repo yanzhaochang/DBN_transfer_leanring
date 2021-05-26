@@ -12,7 +12,7 @@ from PyQt5.QtGui import *
 
 from UI_SampleGeneration import UI_SGBM, UI_SGTL
 from UI_ModelTraining import UI_DBNBM, UI_DBNTL
-from UI_Optimizer import UI_AAMO
+from UI_Optimizer import UI_AAMO, UI_AAMOTL
 
 
 class MainWindow(QMainWindow):
@@ -20,12 +20,12 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(parent)
         self.main_table = QTabWidget()
         self.setCentralWidget(self.main_table)
-        self.setWindowTitle('电力系统紧急切负荷优化软件')
-        self.setWindowIcon(QIcon('.\\logo\\安全.png'))
+        self.setWindowTitle('电力系统紧急切负荷智能优化软件')
+        self.setWindowIcon(QIcon('.\\data\\safety.png'))
         self.main_table.setStyleSheet('background-color: grey')
         self.main_table.setTabPosition(QTabWidget.South)
         
-        self.simulator = STEPS(is_default=False, log_file='.\\log\\log.txt')
+        self.simulator = STEPS(is_default=False, log_file='.\\simulation\\log_init.txt')
         
         self.init_window_menu()
         self.window_output()
@@ -35,14 +35,14 @@ class MainWindow(QMainWindow):
         
         basic_parameter = bar.addMenu('基础设置')
         basic_parameter.addAction('电网模型') 
-        basic_parameter.addAction('导入切负荷站设置')
-        basic_parameter.addAction('保存切负荷站设置')
-        basic_parameter.addAction('导入直流闭锁设置')
-        basic_parameter.addAction('保存直流闭锁设置')
-        basic_parameter.addAction('安全约束设置')
+        basic_parameter.addAction('导入切负荷站')
+        basic_parameter.addAction('保存切负荷站')
+        basic_parameter.addAction('导入直流闭锁')
+        basic_parameter.addAction('保存直流闭锁')
+        basic_parameter.addAction('安全约束')
         basic_parameter.triggered[QAction].connect(self.set_basic_parameter)
         
-        basic_model_training = bar.addMenu('辅助模型训练')
+        basic_model_training = bar.addMenu('基础模型训练')
         basic_model_training.addAction('样本生成')
         basic_model_training.addAction('模型训练')
         basic_model_training.triggered[QAction].connect(self.train_basic_model)
@@ -52,8 +52,9 @@ class MainWindow(QMainWindow):
         model_update.addAction('模型微调')
         model_update.triggered[QAction].connect(self.update_model)
     
-        optimizer = bar.addMenu('代理辅助优化')
-        optimizer.addAction('启动')
+        optimizer = bar.addMenu('优化计算')
+        optimizer.addAction('单方案优化')
+        optimizer.addAction('多方案优化')
         optimizer.triggered[QAction].connect(self.start_scenraio_optimizer)
 
         setting = bar.addMenu('帮助')
@@ -70,9 +71,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.BottomDockWidgetArea, items)
         
         self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        return 
-      
+        self.setStatusBar(self.statusBar) 
 
     def set_basic_parameter(self, q):
         if q.text() == '电网模型':
@@ -87,7 +86,7 @@ class MainWindow(QMainWindow):
             self.text_output.append('加载电网模型： ' + path_raw_file)
             self.display_network_data() 
         
-        elif q.text() == '导入切负荷站设置':
+        elif q.text() == '导入切负荷站':
             try:
                 object.__getattribute__(self, 'scenario_table')
             except:
@@ -104,7 +103,7 @@ class MainWindow(QMainWindow):
             self.scenario_table.set_loads_shedding_location(path_name) 
             self.text_output.append('导入切负荷站设置： ' + path_name)
 
-        elif q.text() == '保存切负荷站设置': 
+        elif q.text() == '保存切负荷站': 
             try:
                 object.__getattribute__(self, 'scenario_table')
             except:
@@ -112,11 +111,11 @@ class MainWindow(QMainWindow):
                 dialog.exec_()
                 return 
 
-            self.scenario_table.save_loads_shedding_location('.\\参数设置\\切负荷站.csv') 
-            self.text_output.append('保存切负荷站设置： ' + '.\\参数设置\\切负荷站.csv')
+            self.scenario_table.save_loads_shedding_location('.\\data\\loads_shedding.csv') 
+            self.text_output.append('保存切负荷站设置: ' + '.\\data\\loads_shedding.csv')
             return 
 
-        elif q.text() == '导入直流闭锁设置':
+        elif q.text() == '导入直流闭锁':
             try:
                 object.__getattribute__(self, 'scenario_table')
             except:
@@ -133,17 +132,17 @@ class MainWindow(QMainWindow):
             self.scenario_table.set_block_hvdc_location(path_name)   
             self.text_output.append('导入闭锁直流设置： ' + path_name)
 
-        elif q.text() == '保存直流闭锁设置':
+        elif q.text() == '保存直流闭锁':
             try:
                 object.__getattribute__(self, 'scenario_table')
             except:
                 dialog = QMessageBox(QMessageBox.Warning, '警告', '未导入电网运行文件！！！')
                 dialog.exec_()
                 return 
-            self.scenario_table.save_hvdc_blocking_location('.\\参数设置\\闭锁直流.csv')  
-            self.text_output.append('保存闭锁直流设置： ' + '.\\参数设置\\闭锁直流.csv')    
+            self.scenario_table.save_hvdc_blocking_location('.\\data\\hvdc_block.csv')  
+            self.text_output.append('保存闭锁直流设置： ' + '.\\data\\hvdc_block.csv')    
 
-        elif q.text() == '安全约束设置':
+        elif q.text() == '安全约束':
             try:
                 object.__getattribute__(self, 'scenario_table')
             except:
@@ -180,13 +179,16 @@ class MainWindow(QMainWindow):
             return  
    
     def start_scenraio_optimizer(self, q):
-        if q.text() == '启动':
+        if q.text() == '单方案优化':
+            self.text_output.append('启动单方案优化程序')
             dialog = UI_AAMO()
             dialog.exec_()
+        elif q.text() == '多方案优化':
+            self.text_output.append('启动多方案优化程序')
+            dialog = UI_AAMOTL()
+            dialog.exec_()            
         else:
             return             
-
-
 
     def display_network_data(self):
         self.main_table.setStyleSheet('background-color: white')
@@ -194,8 +196,7 @@ class MainWindow(QMainWindow):
         self.scenario_table.display_bus_table()
         self.scenario_table.display_generator_table()
         self.scenario_table.display_load_table()
-        self.scenario_table.display_hvdc_table()
-        return 
+        self.scenario_table.display_hvdc_table() 
 
 
 class Table_Show(QWidget):
@@ -204,7 +205,7 @@ class Table_Show(QWidget):
         self.text_output = text_output
         self.tab_raw = tab_raw
         self.simulator = simulator
-        self.simulator.load_dynamic_data('.\\参数设置\\bench_shandong_change_with_gov.dyr', 'PSS/E')
+        self.simulator.load_dynamic_data('.\\data\\bench_shandong_change_with_gov.dyr', 'PSS/E')
         return                                   
 
     def display_bus_table(self):  #显示母线数据
@@ -242,7 +243,6 @@ class Table_Show(QWidget):
             ANGLE_DEG = self.simulator.get_bus_data(buses[i], 'F', 'ANGLE_DEG')
             ANGLE_DEG = round(ANGLE_DEG, 4)
             self.tab_raw_bus.setItem(i, 6, QTableWidgetItem(str(ANGLE_DEG))) 
-        #self.tab_raw_bus.verticalScrollBar().setValue(rows)
         return 
         
     def display_generator_table(self):  #加载发电机数据
@@ -345,8 +345,7 @@ class Table_Show(QWidget):
             self.tab_raw_hvdc.setItem(i, 5, QTableWidgetItem(str(VDCN_KV)))
             
             RCOMP_OHM = self.simulator.get_hvdc_data(hvdcs[0], 'F', 'HVDC', 'RCOMP_OHM')
-            self.tab_raw_hvdc.setItem(i, 6, QTableWidgetItem(str(RCOMP_OHM)))
-        return 
+            self.tab_raw_hvdc.setItem(i, 6, QTableWidgetItem(str(RCOMP_OHM))) 
         
     def set_loads_shedding_location(self, path_name):
         data = pd.read_csv(path_name, header=0, engine='python')
@@ -362,8 +361,7 @@ class Table_Show(QWidget):
             if load in loads_shedding:
                 j = loads_shedding.index(load)
                 self.tab_raw_load.setItem(i, 4, QTableWidgetItem(str(max_percent[j]*100)))
-        self.text_output.append('导入切负荷设置成功!')
-        return 
+        self.text_output.append('导入切负荷设置成功!') 
 
     def set_block_hvdc_location(self, path_name):
         data = pd.read_csv(path_name, header=0, engine='python')
@@ -378,7 +376,6 @@ class Table_Show(QWidget):
             hvdc = eval(hvdc)
             if hvdc in data:
                 self.tab_raw_hvdc.setItem(i, 7, QTableWidgetItem('是'))
-        return
  
     def save_loads_shedding_location(self, path):
         row_num = self.tab_raw_load.rowCount() 
@@ -402,8 +399,7 @@ class Table_Show(QWidget):
             csv_write = csv.writer(f)
             csv_write.writerow(['负荷', '最大切除比例'])
             csv_write.writerows(loads_setting)       
-        self.text_output.append('切负荷设置保存成功!')        
-        return 
+        self.text_output.append('切负荷设置保存成功!')         
      
     def save_hvdc_blocking_location(self, path):
         row_num = self.tab_raw_hvdc.rowCount() 
@@ -424,8 +420,7 @@ class Table_Show(QWidget):
             csv_write = csv.writer(f)
             csv_write.writerow(['直流'])
             csv_write.writerows(hvdcs_setting)       
-        self.text_output.append('直流闭锁设置保存成功!')                          
-        return         
+        self.text_output.append('直流闭锁设置保存成功!')                                   
 
 
 class SecurityConstraint(QDialog):
@@ -437,11 +432,9 @@ class SecurityConstraint(QDialog):
         self.setLayout(self.mainlayout)
 
         self.init_security_setting()
-        self.text_output = text_output
-        return 
+        self.text_output = text_output 
 
     def init_security_setting(self):
-
         frequency_label = QLabel('最低频率/Hz')
         self.min_frequency_spinbox = QDoubleSpinBox()
         self.min_frequency_spinbox.setValue(49.5)
@@ -481,8 +474,7 @@ class SecurityConstraint(QDialog):
         self.mainlayout.addWidget(self.voltage_time_spinbox, 1, 3)
         self.mainlayout.addWidget(angle_label, 2, 0)
         self.mainlayout.addWidget(self.max_angle_spinbox, 2, 1)        
-        self.mainlayout.addWidget(self.save_button, 4, 3)
-        return                 
+        self.mainlayout.addWidget(self.save_button, 4, 3)                 
 
     def save_system_security_setting(self):
         min_frequency = self.min_frequency_spinbox.value()
@@ -490,7 +482,7 @@ class SecurityConstraint(QDialog):
         voltage_time = self.voltage_time_spinbox.value()
         max_angle = self.max_angle_spinbox.value()
 
-        with open('.\\参数设置\\系统安全约束.csv', 'w', newline='') as f: 
+        with open('.\\data\\safety_constraint.csv', 'w', newline='') as f: 
             csv_write = csv.writer(f)
             csv_write.writerow(['最低频率', '电压阈值', '电压时间', '最大功角'])
             csv_write.writerow([min_frequency, min_voltage, voltage_time, max_angle])  
@@ -498,4 +490,4 @@ class SecurityConstraint(QDialog):
         self.text_output.append('设置电压阈值：{}pu'.format(min_voltage))
         self.text_output.append('设置低于电压阈值时间：{}s'.format(voltage_time))
         self.text_output.append('设置最大功角差：{}deg'.format(max_angle))
-        return 
+        self.text_output.append('保存系统安全约束设置：.\\data\\safety_constraint.csv')  

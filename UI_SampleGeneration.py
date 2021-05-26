@@ -9,6 +9,8 @@ plt.rcParams['axes.unicode_minus'] = False
 
 import csv 
 import numpy as np 
+import pandas as pd 
+from sklearn.model_selection import train_test_split
 import sys 
 sys.path.append('.\\code')
 from SampleGeneration import SGB, SGTL 
@@ -19,9 +21,9 @@ class UI_SGBM(QDialog):
     message_singal = pyqtSignal(str)
     def __init__(self):
         super(UI_SGBM, self).__init__()
-        self.setWindowTitle('样本生成')
+        self.setWindowTitle('基础模型训练样本生成')
         self.resize(700, 500)
-        self.setWindowIcon(QIcon('.\\logo\\安全.png'))
+        self.setWindowIcon(QIcon('.\\data\\safety.png'))
 
         self.mainlayout = QGridLayout()
         self.setLayout(self.mainlayout)
@@ -43,7 +45,7 @@ class UI_SGBM(QDialog):
         scenario_button = QPushButton('选择')
         scenario_button.clicked.connect(self.choose_scenario)
         self.scenario_line = QLineEdit()
-        self.scenario_line.setText('.\\运行方式\\example_scenario_source.raw')
+        self.scenario_line.setText('.\\scenarios\\example_scenario_source.raw')
         self.parameter_layout.addWidget(scenario_label, 0, 0)
         self.parameter_layout.addWidget(self.scenario_line, 0, 1, 1, 4)  
         self.parameter_layout.addWidget(scenario_button, 0, 5)  
@@ -107,9 +109,10 @@ class UI_SGBM(QDialog):
         self.sample_thread.process_signal.connect(self.refresh_process_information)       
         
     def generate_samples(self):
+        self.process_table.clearContents()
         sample_num = self.sample_num_spinbox.value()
+        self.process_table.setRowCount(sample_num)
         pallel_num = self.pallel_num_spinbox.value()
-        test_data_percent = self.test_data_percent_spinbox.value()
 
         scenario = self.scenario_line.text()
         if len(scenario) == 0:
@@ -117,15 +120,12 @@ class UI_SGBM(QDialog):
             dialog.exec_()
             return
 
-        self.sample_thread.set_generation_parameter({'场景': scenario, '样本数': sample_num, '并行数': pallel_num, '测试集比例': test_data_percent})    
+        self.sample_thread.set_generation_parameter({'场景': scenario, '样本数': sample_num, '并行数': pallel_num})    
         self.button_generation.setEnabled(False)
-        
-        self.process_table.setRowCount(sample_num)
         self.sample_thread.start()
         
-    def finish_generation_process(self, str_singal):
+    def finish_generation_process(self, list_singal):
         self.button_generation.setEnabled(True)
-
         row = self.process_table.rowCount()
         labels = []
         for i in range(row):
@@ -135,8 +135,36 @@ class UI_SGBM(QDialog):
         self.stable_line.setText(str(np.sum(labels)))
         self.unstable_line.setText(str(len(labels) - np.sum(labels)))
 
-        QMessageBox.information(self, "温馨提示", "样本生成完毕!", QMessageBox.Yes, QMessageBox.Yes)
-        
+        QMessageBox.information(self, "提示", "样本生成完毕!", QMessageBox.Yes, QMessageBox.Yes)
+        shedding_percent, sample_feature = list_singal[0], list_singal[1]
+        self.spilt_sample(shedding_percent, sample_feature)
+
+    def spilt_sample(self, shedding_percent, sample_feature):
+        loads_shedding = self.get_loads_shedding()
+
+        test_data_percent = self.test_data_percent_spinbox.value()
+        x_train, x_test, y_train, y_test = train_test_split(shedding_percent, sample_feature, test_size=test_data_percent, random_state=10)   
+    
+        with open('.\\data\\x_train.csv', 'w', newline='') as f: 
+            csv_write = csv.writer(f)
+            csv_write.writerow(loads_shedding)
+            csv_write.writerows(x_train.tolist())
+
+        with open('.\\data\\x_test.csv', 'w', newline='') as f: 
+            csv_write = csv.writer(f)
+            csv_write.writerow(loads_shedding)
+            csv_write.writerows(x_test.tolist())
+
+        with open('.\\data\\y_train.csv', 'w', newline='') as f: 
+            csv_write = csv.writer(f)
+            csv_write.writerow(['编号', '频率', '标签'])
+            csv_write.writerows(y_train.tolist())
+
+        with open('.\\data\\y_test.csv', 'w', newline='') as f: 
+            csv_write = csv.writer(f)
+            csv_write.writerow(['编号', '频率', '标签'])
+            csv_write.writerows(y_test.tolist())
+
     def choose_scenario(self):
         openfile_name = QFileDialog.getOpenFileName(self, '场景', '' ,'file(*.raw)')
         if len(openfile_name[0]) == 0:
@@ -146,41 +174,43 @@ class UI_SGBM(QDialog):
             return
         self.scenario_line.setText(path_name)  
 
-
     def refresh_process_information(self, sample_feature):
         for i in range(len(sample_feature)):
             self.process_table.setItem(sample_feature[i][0], 0, QTableWidgetItem(str(sample_feature[i][0]))) 
             frequency = round(sample_feature[i][1], 4)
             self.process_table.setItem(sample_feature[i][0], 1, QTableWidgetItem(str(frequency)))
             self.process_table.setItem(sample_feature[i][0], 2, QTableWidgetItem(str(sample_feature[i][2])))
-        self.process_table.verticalScrollBar().setValue(sample_feature[-1][0])         
+        self.process_table.verticalScrollBar().setValue(sample_feature[0][0])         
 
+    def get_loads_shedding(self):
+        data = pd.read_csv('.\\data\\loads_shedding.csv', header=0, engine='python')
+        loads_shedding = data['负荷'].values.tolist() 
+        for i in range(len(loads_shedding)):
+            loads_shedding[i] = eval(loads_shedding[i])
+        return loads_shedding
 
 class SampleGenerationThread(QThread):
-    finish_signal = pyqtSignal(str)  
+    finish_signal = pyqtSignal(list)  
     process_signal = pyqtSignal(list)
 
     def __init__(self):
         super(SampleGenerationThread, self).__init__()
-        self.load_shedding_location = '.\\参数设置\\切负荷站.csv'
-        self.blocking_hvdc_location = '.\\参数设置\\闭锁直流.csv'
-        self.dyr_file = '.\\参数设置\\bench_shandong_change_with_gov.dyr'
-        self.system_security_constraint = '.\\参数设置\\系统安全约束.csv'
+        self.load_shedding_location = '.\\data\\loads_shedding.csv'
+        self.blocking_hvdc_location = '.\\data\\hvdc_block.csv'
+        self.dyr_file = '.\\data\\bench_shandong_change_with_gov.dyr'
+        self.system_security_constraint = '.\\data\\safety_constraint.csv'
          
-
     def set_generation_parameter(self, parameter):
         self.parameter = parameter
          
-
     def run(self): #线程执行函数
-        model = SGB(sample_num=self.parameter['样本数'], pallel_num=self.parameter['并行数'], test_size=self.parameter['测试集比例'])
+        model = SGB(sample_num=self.parameter['样本数'], pallel_num=self.parameter['并行数'])
         model.set_load_shedding_location(self.load_shedding_location)
         model.set_blocking_hvdc_location(self.blocking_hvdc_location)        
         model.load_future_scenario(self.parameter['场景'], self.dyr_file) 
         model.set_system_security_constraint(self.system_security_constraint)
 
         shedding_percent = model.get_shedding_percent()
-
         all_sample_feature = []
         k = 0
         while True:
@@ -192,7 +222,7 @@ class SampleGenerationThread(QThread):
             simulation_pars = []
             for j in range(m):
                 n = k + j
-                par = {'sample_num': n, 'scale_percent': shedding_percent[n, :]}
+                par = {'sample_num': n, 'shedding_percent': shedding_percent[n, :]}
                 simulation_pars.append(par)                
             
             sample_feature = model.generate_load_shedding_sample_with_parallel_method(simulation_pars)
@@ -203,9 +233,7 @@ class SampleGenerationThread(QThread):
             if k >= shedding_percent.shape[0]:
                 break     
         all_sample_feature = np.array(all_sample_feature)
-
-        model.spilt_sample(shedding_percent, all_sample_feature)
-        self.finish_signal.emit('样本生成完成')
+        self.finish_signal.emit([shedding_percent, all_sample_feature])
 
 
 class UI_SGTL(QDialog):
@@ -213,7 +241,7 @@ class UI_SGTL(QDialog):
         super(UI_SGTL, self).__init__()   
         self.setWindowTitle('未来方式下样本生成') 
         self.resize(700, 600)
-        self.setWindowIcon(QIcon('.\\logo\\安全.png')) 
+        self.setWindowIcon(QIcon('.\\data\\safety.png')) 
 
         self.mainlayout = QGridLayout()
         self.setLayout(self.mainlayout)
@@ -227,7 +255,6 @@ class UI_SGTL(QDialog):
 
         self.sample_thread = SampleGenerationThreadTl()
         self.sample_thread.finish_signal.connect(self.finish_sample_generation)
-        self.sample_thread.finish_check_signal.connect(self.finish_check_best_sheme)
         self.sample_thread.process_signal.connect(self.refresh_process_information)
         return 
 
@@ -237,11 +264,12 @@ class UI_SGTL(QDialog):
 
         current_best_scheme_label = QLabel('当前方案')
         self.current_best_scheme_line = QLineEdit()
-        self.current_best_scheme_line.setText('.\\优化结果\\最优切负荷方案.csv')
+        self.current_best_scheme_line.setText('.\\data\\多种切负荷方案_example.csv')
         current_best_scheme_button = QPushButton('选择')
 
         future_scenario_label = QLabel('未来运行方式')
         self.future_scenario_line = QLineEdit()
+        self.future_scenario_line.setText('.\\scenarios\\example_scenario_target_up.raw')
         future_scenario_button = QPushButton('选择')
         future_scenario_button.clicked.connect(self.choose_future_scenario)
 
@@ -252,20 +280,21 @@ class UI_SGTL(QDialog):
         self.sample_num_spinbox.setValue(10)
         self.sample_num_spinbox.setSingleStep(10)    
 
-        sample_scale_label = QLabel('样本分布系数')
-        self.sample_scale_spinbox =  QDoubleSpinBox()
-        self.sample_scale_spinbox.setDecimals(3)
-        self.sample_scale_spinbox.setMinimum(0.001)
-        self.sample_scale_spinbox.setMaximum(0.05)
-        self.sample_scale_spinbox.setValue(0.01)
-        self.sample_scale_spinbox.setSingleStep(0.002) 
+        self.up_div_rbtn = QRadioButton('上偏移')
+        self.down_div_rbtn = QRadioButton('下偏移')
+        self.down_div_rbtn.setChecked(True)
+        self.parameter_layout.addWidget(self.up_div_rbtn, 3, 0)
+        self.parameter_layout.addWidget(self.down_div_rbtn, 3, 1)          
 
         deviation_label = QLabel('偏移系数')
         self.deviation_spinbox =  QDoubleSpinBox()
-        self.deviation_spinbox.setMinimum(0.1)
-        self.deviation_spinbox.setMaximum(0.9)
-        self.deviation_spinbox.setValue(0.5)
-        self.deviation_spinbox.setSingleStep(0.05) 
+        self.deviation_spinbox.setDecimals(4)
+        self.deviation_spinbox.setMinimum(0.001)
+        self.deviation_spinbox.setMaximum(0.01)
+        self.deviation_spinbox.setValue(0.008)
+        self.deviation_spinbox.setSingleStep(0.0005) 
+        self.parameter_layout.addWidget(deviation_label, 3, 2)
+        self.parameter_layout.addWidget(self.deviation_spinbox, 3, 3) 
 
         pallel_num_label = QLabel('并行数')
         self.pallel_num_spinbox = QSpinBox()
@@ -274,8 +303,6 @@ class UI_SGTL(QDialog):
         self.pallel_num_spinbox.setValue(2)
         self.pallel_num_spinbox.setSingleStep(1)
 
-        self.check_origin_scheme_button = QPushButton('校验原方案')
-        self.check_origin_scheme_button.clicked.connect(self.check_origin_scheme)
         self.generation_button = QPushButton('生成')
         self.generation_button.clicked.connect(self.start_sample_generation)
         self.origin_scheme_line = QLineEdit()
@@ -293,13 +320,6 @@ class UI_SGTL(QDialog):
         self.parameter_layout.addWidget(pallel_num_label, 2, 2)
         self.parameter_layout.addWidget(self.pallel_num_spinbox, 2, 3)  
 
-        self.parameter_layout.addWidget(sample_scale_label, 3, 0)
-        self.parameter_layout.addWidget(self.sample_scale_spinbox, 3, 1) 
-        self.parameter_layout.addWidget(deviation_label, 3, 2)
-        self.parameter_layout.addWidget(self.deviation_spinbox, 3, 3) 
-
-        self.parameter_layout.addWidget(self.check_origin_scheme_button, 4, 0)
-        self.parameter_layout.addWidget(self.origin_scheme_line, 4, 1, 1, 3)
         self.parameter_layout.addWidget(self.generation_button, 5, 3)        
          
 
@@ -322,25 +342,28 @@ class UI_SGTL(QDialog):
         self.process_layout.addWidget(self.unstable_line, 1, 3) 
 
     def start_sample_generation(self):
+        self.generation_button.setEnabled(False)
         best_scheme = self.current_best_scheme_line.text()
-        sample_scale = self.sample_scale_spinbox.value()
         sample_num = self.sample_num_spinbox.value()
         pallel_num = self.pallel_num_spinbox.value()
         deviation_num = self.deviation_spinbox.value()
 
+        self.process_table.clearContents()
         self.process_table.setRowCount(sample_num)
         scenario = self.future_scenario_line.text()
         if len(scenario) == 0:
             QMessageBox.warning(self, '警告', '未选择未来场景', QMessageBox.Yes | QMessageBox.No,QMessageBox.Yes)
             return 
-        parameter = {'场景': scenario, '样本数': sample_num, '并行数': pallel_num, '分布系数': sample_scale, '偏移系数':deviation_num,
-            '最优方案': best_scheme}
+
+        if self.up_div_rbtn.isChecked():
+            direction = '增加'
+        else:
+            direction = '减少'
+        parameter = {'场景': scenario, '样本数': sample_num, '并行数': pallel_num, '偏移系数':deviation_num,
+            '最优方案': best_scheme, '方向': direction}
 
         self.sample_thread.set_generation_parameter(parameter)
-        self.sample_thread.check_signal = False 
-        self.generation_button.setEnabled(False)
-        self.sample_thread.start()
-        return  
+        self.sample_thread.start()  
 
     def finish_sample_generation(self, singal):
         self.generation_button.setEnabled(True)
@@ -353,27 +376,7 @@ class UI_SGTL(QDialog):
         self.stable_line.setText(str(np.sum(labels)))
         self.unstable_line.setText(str(len(labels) - np.sum(labels)))
 
-        QMessageBox.information(self, "温馨提示", "样本生成完毕!", QMessageBox.Yes, QMessageBox.Yes) 
-
-    def check_origin_scheme(self):
-        self.check_origin_scheme_button.setEnabled(False)
-        best_scheme = self.current_best_scheme_line.text()
-        sample_scale = self.sample_scale_spinbox.value()
-        sample_num = self.sample_num_spinbox.value()
-        pallel_num = self.pallel_num_spinbox.value()
-        deviation_num = self.deviation_spinbox.value()
-
-        scenario = self.future_scenario_line.text()
-        if len(scenario) == 0:
-            QMessageBox.warning(self, '警告', '未选择未来场景', QMessageBox.Yes | QMessageBox.No,QMessageBox.Yes)
-            return 
-        parameter = {'场景': scenario, '样本数': sample_num, '并行数': pallel_num, '分布系数': sample_scale, '偏移系数':deviation_num,
-            '最优方案': best_scheme}
-
-        self.sample_thread.set_generation_parameter(parameter)
-        self.sample_thread.check_signal = True 
-        self.sample_thread.start()
-        return 
+        QMessageBox.information(self, "提示", "样本生成完毕!", QMessageBox.Yes, QMessageBox.Yes) 
 
     def choose_future_scenario(self):
         openfile_name = QFileDialog.getOpenFileName(self, '未来运行方式', '' ,'file(*.raw)')
@@ -384,11 +387,7 @@ class UI_SGTL(QDialog):
         if len(path_name) == 0:
             return
         self.future_scenario_line.setText(path_name)          
-        return 
-
-    def finish_check_best_sheme(self, min_frequency):
-        self.check_origin_scheme_button.setEnabled(True)
-        self.origin_scheme_line.setText('最低频率: ' + min_frequency + 'Hz')
+         
 
     def refresh_process_information(self, sample_feature):
         for i in range(len(sample_feature)):
@@ -405,12 +404,10 @@ class SampleGenerationThreadTl(QThread):#线程类
     process_signal = pyqtSignal(list)
     def __init__(self):
         super(SampleGenerationThreadTl, self).__init__()
-        self.load_shedding_location = '.\\参数设置\\切负荷站.csv'
-        self.blocking_hvdc_location = '.\\参数设置\\闭锁直流.csv'
-        self.dyr_file = '.\\参数设置\\bench_shandong_change_with_gov.dyr'
-        self.system_security_constraint = '.\\参数设置\\系统安全约束.csv'
-        
-        self.check_signal = False 
+        self.load_shedding_location = '.\\data\\loads_shedding.csv'
+        self.blocking_hvdc_location = '.\\data\\hvdc_block.csv'
+        self.dyr_file = '.\\data\\bench_shandong_change_with_gov.dyr'
+        self.system_security_constraint = '.\\data\\safety_constraint.csv'
 
     def set_generation_parameter(self, parameter):
         self.parameter = parameter
@@ -423,16 +420,19 @@ class SampleGenerationThreadTl(QThread):#线程类
         model.set_system_security_constraint(self.system_security_constraint)
         model.set_parameter_data('并行数', self.parameter['并行数'])
         model.set_parameter_data('样本数', self.parameter['样本数'])
-        model.set_parameter_data('分布系数', self.parameter['分布系数'])
         model.set_parameter_data('偏移系数', self.parameter['偏移系数'])
+        model.set_parameter_data('方向', self.parameter['方向'])
         model.set_best_scheme(self.parameter['最优方案'])
 
-        if self.check_signal is True:
-            min_frequency = model.check_origin_scheme()
-            self.finish_check_signal.emit(str(min_frequency))
-            return
-
+        data = pd.read_csv(self.load_shedding_location, header=0, engine='python')
+        loads_shedding = data['负荷'].values.tolist() 
+        for i in range(len(loads_shedding)):
+            loads_shedding[i] = eval(loads_shedding[i])
         shedding_percent = model.generate_new_scenario_load_shedding_sample()
+        with open('.\\data\\x_train_tl.csv', 'w', newline='') as f: 
+            csv_write = csv.writer(f)
+            csv_write.writerow(loads_shedding)
+            csv_write.writerows(shedding_percent)
 
         all_sample_feature = []
         k = 0
@@ -455,6 +455,9 @@ class SampleGenerationThreadTl(QThread):#线程类
             k = k + m 
             if k >= shedding_percent.shape[0]:
                 break     
-        model.save_sample_feature(all_sample_feature)
-        self.finish_signal.emit('训练完成')
+        with open('.\\data\\y_train_tl.csv', 'w', newline='') as f: 
+            csv_write = csv.writer(f)
+            csv_write.writerow(['编号', '频率', '标签'])
+            csv_write.writerows(all_sample_feature) 
+        self.finish_signal.emit('完成')
         
